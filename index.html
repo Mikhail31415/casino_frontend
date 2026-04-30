@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CryptoCasino</title>
+<title>CryptoCasino — Gigachad Protocol</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
@@ -422,7 +422,8 @@
 
   <div id="config-banner">
     <span>CONTRACT ADDRESS</span>
-    <span>0xfd66b94833A57fB299Eb6b4C8fE633C2b73a377A</span>
+    <input id="contract-addr-input" type="text" placeholder="0x..." value="">
+    <button id="btn-set-contract">SET</button>
   </div>
 
   <div class="grid-2">
@@ -471,7 +472,7 @@
 
         <div class="field">
           <label>COEFFICIENT (×)</label>
-          <input type="number" id="coeff-input" min="2" max="1000000" value="2" step="1">
+          <input type="number" id="coeff-input" min="2" max="100" value="2" step="1">
         </div>
 
         <div class="field">
@@ -480,7 +481,7 @@
         </div>
 
         <div class="field">
-          <label>YOUR ENTROPY (n) — PURE RANDOM SECRET</label>
+          <label>YOUR SECRET NUMBER (n)</label>
           <div class="input-row">
             <input type="text" id="n-input" placeholder="random">
             <button id="btn-regen-n">⟳ RANDOM</button>
@@ -539,13 +540,15 @@ const ABI = [
   "event BetSettled(bytes32 indexed id, bool playerWon, uint256 payout)",
 ];
 
+const MAX_COEFF = 100n;
+const MAX_N     = 1_000_000n;
 const BETS_PER_PAGE = 5;
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let provider  = null;   // ethers provider
 let signer    = null;
 let contract  = null;
-let contractAddress = "0xfd66b94833A57fB299Eb6b4C8fE633C2b73a377A";
+let contractAddress = localStorage.getItem('cc_contract') || '';
 
 let knownProviders   = JSON.parse(localStorage.getItem('cc_known_providers') || '[]');
 let providerData     = {};   // address → on-chain data
@@ -570,9 +573,9 @@ function fmtEth(wei) { return parseFloat(ethers.formatEther(wei)).toFixed(4); }
 function fmtEdge(e) { return (Number(e) / 10).toFixed(1) + '%'; }
 
 function randomN() {
-  const arr = new Uint8Array(32);
+  const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
-  return BigInt('0x' + Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join(''));
+  return (BigInt(arr[0]) % MAX_N) + 1n;
 }
 
 function randomSalt() {
@@ -610,14 +613,18 @@ async function connectWallet() {
 
 // ─── PROVIDERS ──────────────────────────────────────────────────────────────
 async function fetchProviderData(addr) {
-  if (!contract) return null;
+  if (!contract) { toast('Сначала подключи кошелёк', 'warn'); return null; }
   try {
     const p = await contract.providers(addr);
-    if (!p.isActive) return null;
+    if (!p.isActive) { toast('Провайдер не активен: ' + fmtAddr(addr), 'warn'); return null; }
     const hostFee = await contract.hostGasFee();
     const gasFee = p.responsible === ethers.ZeroAddress ? hostFee : p.gasFee;
     return { address: addr, liquidity: p.liquidity, houseEdge: p.houseEdge, gasFee, isActive: p.isActive };
-  } catch(e) { return null; }
+  } catch(e) {
+    console.error('fetchProviderData error:', e);
+    toast('Ошибка загрузки провайдера: ' + (e.shortMessage || e.message || 'unknown'), 'error');
+    return null;
+  }
 }
 
 async function refreshAllProviders() {
@@ -674,7 +681,7 @@ function renderProviderList() {
     item.className = 'provider-item' + (selectedProvider === p.address ? ' selected' : '');
     item.dataset.addr = p.address;
 
-    const minCoeff = 2, maxCoeff = Number(MAX_COEFF).toLocaleString();
+    const minCoeff = 2, maxCoeff = Number(MAX_COEFF);
     const edge = Number(p.houseEdge) / 10;
 
     item.innerHTML = `
@@ -717,16 +724,13 @@ function renderProviderStats() {
 
   const edge = (Number(p.houseEdge) / 10).toFixed(1);
   const maxPayout = BigInt(p.liquidity);
-  const coeff = parseFloat(document.getElementById('coeff-input').value) || 2;
-  const winChance = ((Number(p.houseEdge) / (coeff * 1000)) * 100).toFixed(4);
 
   el.innerHTML = `
     <div class="stat-row"><span class="sk">ADDRESS</span><span class="sv">${fmtAddr(p.address)}</span></div>
     <div class="stat-row"><span class="sk">HOUSE EDGE</span><span class="sv good">${edge}%</span></div>
     <div class="stat-row"><span class="sk">LIQUIDITY</span><span class="sv">${fmtEth(maxPayout)} ETH</span></div>
     <div class="stat-row"><span class="sk">GAS FEE</span><span class="sv warn">${fmtEth(p.gasFee)} ETH</span></div>
-    <div class="stat-row"><span class="sk">COEFF RANGE</span><span class="sv">×2 – ×1,000,000</span></div>
-    <div class="stat-row"><span class="sk">WIN CHANCE @ ×${coeff}</span><span class="sv good">${winChance}%</span></div>
+    <div class="stat-row"><span class="sk">COEFF RANGE</span><span class="sv">×2 – ×${MAX_COEFF}</span></div>
   `;
 }
 
@@ -740,7 +744,6 @@ function updatePayoutPreview() {
   const payout = netAmount * coeff;
   document.getElementById('payout-preview').textContent =
     payout > 0 ? payout.toFixed(4) + ' ETH' : '— ETH';
-  if (p) renderProviderStats();
 }
 
 function regenN() {
@@ -755,9 +758,10 @@ async function placeBet() {
 
   const nRaw   = document.getElementById('n-input').value.trim();
   const n      = nRaw ? BigInt(nRaw) : randomN();
+  if (n < 1n || n > MAX_N) { toast(`N must be 1–${MAX_N}`, 'warn'); return; }
 
   const coeff  = BigInt(document.getElementById('coeff-input').value || '0');
-  if (coeff < 2n || coeff > MAX_COEFF) { toast('Coeff must be 2–1,000,000', 'warn'); return; }
+  if (coeff < 2n || coeff > MAX_COEFF) { toast('Coeff must be 2–100', 'warn'); return; }
 
   const amountStr = document.getElementById('amount-input').value;
   if (!amountStr) { toast('Enter bet amount', 'warn'); return; }
@@ -938,6 +942,17 @@ function renderBetList() {
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
 document.getElementById('btn-connect').onclick = connectWallet;
+
+document.getElementById('btn-set-contract').onclick = () => {
+  const val = document.getElementById('contract-addr-input').value.trim();
+  if (!val) return;
+  contractAddress = val;
+  localStorage.setItem('cc_contract', val);
+  initContract();
+  toast('Contract set');
+  refreshAllProviders();
+};
+if (contractAddress) document.getElementById('contract-addr-input').value = contractAddress;
 
 document.getElementById('btn-add-provider').onclick = async () => {
   const val = document.getElementById('add-provider-input').value.trim();
