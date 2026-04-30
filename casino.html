@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryptoCasino</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0a0a08;
+    --panel:    #111110;
+    --border:   #2a2a26;
+    --accent:   #c8f135;
+    --accent2:  #f1a435;
+    --dim:      #555550;
+    --text:     #e8e8e0;
+    --danger:   #f13535;
+    --mono:     'Share Tech Mono', monospace;
+    --display:  'Bebas Neue', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 28px 0 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 28px;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 42px;
+    letter-spacing: 2px;
+    line-height: 1;
+    color: var(--accent);
+    text-shadow: 0 0 40px rgba(200,241,53,0.25);
+  }
+
+  .logo span { color: var(--dim); font-size: 16px; display: block; font-family: var(--mono); letter-spacing: 4px; margin-bottom: 4px; }
+
+  .wallet-area { text-align: right; }
+
+  #btn-connect {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 8px 18px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: background 0.15s, color 0.15s;
+  }
+  #btn-connect:hover { background: var(--accent); color: var(--bg); }
+
+  #wallet-addr {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* ── LAYOUT ── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  /* ── PANEL ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+  }
+
+  .panel-title {
+    font-family: var(--display);
+    font-size: 18px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── LABEL / INPUT ── */
+  .field { margin-bottom: 14px; }
+
+  label {
+    display: block;
+    color: var(--dim);
+    letter-spacing: 2px;
+    font-size: 10px;
+    margin-bottom: 5px;
+  }
+
+  input[type=text], input[type=number], select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+
+  select { cursor: pointer; }
+  select option { background: var(--panel); }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+  }
+  .input-row input { flex: 1; }
+  .input-row button {
+    padding: 0 12px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .input-row button:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── PROVIDER LIST ── */
+  #provider-list {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .provider-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: var(--bg);
+  }
+  .provider-item:hover { border-color: var(--accent); background: rgba(200,241,53,0.04); }
+  .provider-item.selected { border-color: var(--accent); background: rgba(200,241,53,0.07); }
+
+  .provider-item .pi-val { color: var(--text); font-size: 12px; }
+  .provider-item .pi-lbl { color: var(--dim); font-size: 10px; letter-spacing: 1px; }
+
+  #provider-toggle {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 9px 12px;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.15s;
+  }
+  #provider-toggle:hover { border-color: var(--accent); }
+  #provider-toggle .arrow { color: var(--dim); transition: transform 0.2s; }
+  #provider-toggle.open .arrow { transform: rotate(180deg); }
+
+  /* ── KNOWN PROVIDERS ── */
+  #known-providers-section { margin-top: 10px; }
+  .known-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .known-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 11px;
+    color: var(--dim);
+    word-break: break-all;
+  }
+  .known-row .remove-kp {
+    background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; flex-shrink: 0;
+    line-height: 1;
+  }
+
+  /* ── STAT ROW ── */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .sk { color: var(--dim); letter-spacing: 1px; }
+  .stat-row .sv { color: var(--text); }
+  .stat-row .sv.good { color: var(--accent); }
+  .stat-row .sv.warn { color: var(--accent2); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    width: 100%;
+    padding: 12px;
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s, transform 0.1s;
+    margin-top: 6px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-secondary { background: transparent; border: 1px solid var(--accent2); color: var(--accent2); }
+  .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+
+  /* ── BETS LIST ── */
+  #bets-section { margin-top: 16px; }
+
+  .bet-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    position: relative;
+  }
+  .bet-card:hover { border-color: var(--dim); }
+  .bet-card.active { border-color: var(--accent); }
+
+  .bet-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .bet-id { font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+  .bet-status {
+    font-size: 10px;
+    padding: 2px 8px;
+    letter-spacing: 2px;
+  }
+  .bet-status.PLACED   { border: 1px solid var(--accent2); color: var(--accent2); }
+  .bet-status.ACCEPTED { border: 1px solid var(--accent);  color: var(--accent);  }
+  .bet-status.SETTLED  { border: 1px solid var(--dim);     color: var(--dim);     }
+  .bet-status.WON      { border: 1px solid var(--accent);  color: var(--accent); background: rgba(200,241,53,0.1); }
+  .bet-status.LOST     { border: 1px solid var(--danger);  color: var(--danger);  }
+
+  .bet-meta {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .bet-meta-item .bm-lbl { font-size: 9px; color: var(--dim); letter-spacing: 1px; }
+  .bet-meta-item .bm-val { font-size: 13px; color: var(--text); margin-top: 2px; }
+
+  /* ── NAV ── */
+  .nav-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .nav-bar button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: var(--mono);
+    padding: 5px 14px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .nav-bar button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+  .nav-bar button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .nav-bar .page-info { color: var(--dim); font-size: 11px; }
+
+  /* ── TOAST ── */
+  #toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 999;
+  }
+  .toast {
+    background: var(--panel);
+    border-left: 3px solid var(--accent);
+    padding: 10px 16px;
+    font-size: 12px;
+    max-width: 340px;
+    animation: slideIn 0.2s ease;
+    letter-spacing: 0.5px;
+  }
+  .toast.error { border-left-color: var(--danger); }
+  .toast.warn  { border-left-color: var(--accent2); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ── CONFIG BANNER ── */
+  #config-banner {
+    background: rgba(241,164,53,0.08);
+    border: 1px solid var(--accent2);
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 12px;
+    color: var(--accent2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  #config-banner input {
+    background: var(--bg);
+    border: 1px solid var(--accent2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 8px;
+    width: 360px;
+    outline: none;
+  }
+  #config-banner button {
+    background: var(--accent2);
+    border: none;
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--dim);
+    padding: 30px;
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <header>
+    <div class="logo">
+      <span>// GIGACHAD PROTOCOL</span>
+      CRYPTOCASINO
+    </div>
+    <div class="wallet-area">
+      <button id="btn-connect">CONNECT WALLET</button>
+      <div id="wallet-addr">—</div>
+    </div>
+  </header>
+
+  <div id="config-banner">
+    <span>CONTRACT ADDRESS</span>
+    <span>0xfd66b94833A57fB299Eb6b4C8fE633C2b73a377A</span>
+  </div>
+
+  <div class="grid-2">
+
+    <!-- LEFT COLUMN -->
+    <div>
+
+      <div class="panel">
+        <div class="panel-title">SELECT PROVIDER</div>
+
+        <div class="field">
+          <label>KNOWN PROVIDER ADDRESSES</label>
+          <div class="input-row">
+            <input id="add-provider-input" type="text" placeholder="0x...">
+            <button id="btn-add-provider">ADD</button>
+          </div>
+          <div id="known-providers-section">
+            <div class="known-list" id="known-list"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>ACTIVE PROVIDER</label>
+          <button id="provider-toggle">
+            <span id="provider-toggle-text">— SELECT —</span>
+            <span class="arrow">▾</span>
+          </button>
+          <div id="provider-list"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;" class="panel" id="provider-stats-panel">
+        <div class="panel-title">PROVIDER INFO</div>
+        <div id="provider-stats">
+          <div class="empty-state">NO PROVIDER SELECTED</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div>
+
+      <div class="panel">
+        <div class="panel-title">PLACE BET</div>
+
+        <div class="field">
+          <label>COEFFICIENT (×)</label>
+          <input type="number" id="coeff-input" min="2" max="1000000" value="2" step="1">
+        </div>
+
+        <div class="field">
+          <label>BET AMOUNT (ETH)</label>
+          <input type="number" id="amount-input" min="0" step="0.001" placeholder="0.01">
+        </div>
+
+        <div class="field">
+          <label>YOUR ENTROPY (n) — PURE RANDOM SECRET</label>
+          <div class="input-row">
+            <input type="text" id="n-input" placeholder="random">
+            <button id="btn-regen-n">⟳ RANDOM</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>POTENTIAL PAYOUT</label>
+          <div id="payout-preview" style="color:var(--accent); font-size:18px; font-family:var(--display); letter-spacing:2px;">— ETH</div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-place">PLACE BET</button>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">REVEAL / SETTLE</div>
+        <div style="color:var(--dim); font-size:11px; margin-bottom:12px; letter-spacing:1px;">
+          SELECT AN ACCEPTED BET BELOW TO REVEAL YOUR N AND CLAIM THE RESULT
+        </div>
+        <button class="btn btn-secondary" id="btn-settle" disabled>REVEAL SELECTED BET</button>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- BETS LIST -->
+  <div id="bets-section">
+    <div class="panel-title" style="font-family:var(--display); font-size:18px; letter-spacing:3px; color:var(--accent); margin-bottom:14px;">
+      BET HISTORY
+    </div>
+    <div class="nav-bar">
+      <button id="btn-prev" disabled>◀ PREV</button>
+      <span class="page-info" id="page-info">—</span>
+      <button id="btn-next" disabled>NEXT ▶</button>
+    </div>
+    <div id="bet-list"></div>
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// ─── ABI ───────────────────────────────────────────────────────────────────
+const ABI = [
+  "function providers(address) view returns (uint256 liquidity, uint256 houseEdge, uint256 gasFee, address responsible, bool isActive)",
+  "function bets(bytes32) view returns (address player, address provider, uint256 amount, uint256 coeff, bytes32 playerHash, uint256 serverS, uint256 deadline, uint8 status)",
+  "function placeBet(address _provider, bytes32 _pHash, uint256 _coeff) payable",
+  "function settle(bytes32 _id, uint256 _n, string _salt)",
+  "function claim(bytes32 _id)",
+  "function hostGasFee() view returns (uint256)",
+  "event BetPlaced(bytes32 indexed id, address player, address provider, uint256 amount, uint256 coeff)",
+  "event BetAccepted(bytes32 indexed id, uint256 serverS)",
+  "event BetSettled(bytes32 indexed id, bool playerWon, uint256 payout)",
+];
+
+const BETS_PER_PAGE = 5;
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let provider  = null;   // ethers provider
+let signer    = null;
+let contract  = null;
+let contractAddress = "0xfd66b94833A57fB299Eb6b4C8fE633C2b73a377A";
+
+let knownProviders   = JSON.parse(localStorage.getItem('cc_known_providers') || '[]');
+let providerData     = {};   // address → on-chain data
+let selectedProvider = null;
+
+let bets         = JSON.parse(localStorage.getItem('cc_bets') || '[]');
+let selectedBetId = null;
+let currentPage  = 0;
+
+// ─── UTILS ─────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type === 'error' ? ' error' : type === 'warn' ? ' warn' : '');
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+
+function fmtAddr(a) { return a ? a.slice(0,6) + '…' + a.slice(-4) : '—'; }
+function fmtEth(wei) { return parseFloat(ethers.formatEther(wei)).toFixed(4); }
+function fmtEdge(e) { return (Number(e) / 10).toFixed(1) + '%'; }
+
+function randomN() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return BigInt('0x' + Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join(''));
+}
+
+function randomSalt() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function saveBets()          { localStorage.setItem('cc_bets', JSON.stringify(bets)); }
+function saveKnown()         { localStorage.setItem('cc_known_providers', JSON.stringify(knownProviders)); }
+
+// ─── CONTRACT ───────────────────────────────────────────────────────────────
+function initContract() {
+  if (!contractAddress || !signer) return;
+  try {
+    contract = new ethers.Contract(contractAddress, ABI, signer);
+  } catch(e) { toast('Bad contract address', 'error'); }
+}
+
+// ─── WALLET ─────────────────────────────────────────────────────────────────
+async function connectWallet() {
+  if (!window.ethereum) { toast('No wallet detected', 'error'); return; }
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send('eth_requestAccounts', []);
+    signer = await provider.getSigner();
+    const addr = await signer.getAddress();
+    document.getElementById('wallet-addr').textContent = fmtAddr(addr);
+    document.getElementById('btn-connect').textContent = 'CONNECTED';
+    initContract();
+    await refreshAllProviders();
+    toast('Wallet connected');
+  } catch(e) { toast(e.message || 'Connection failed', 'error'); }
+}
+
+// ─── PROVIDERS ──────────────────────────────────────────────────────────────
+async function fetchProviderData(addr) {
+  if (!contract) return null;
+  try {
+    const p = await contract.providers(addr);
+    if (!p.isActive) return null;
+    const hostFee = await contract.hostGasFee();
+    const gasFee = p.responsible === ethers.ZeroAddress ? hostFee : p.gasFee;
+    return { address: addr, liquidity: p.liquidity, houseEdge: p.houseEdge, gasFee, isActive: p.isActive };
+  } catch(e) { return null; }
+}
+
+async function refreshAllProviders() {
+  if (!contract) return;
+  const results = await Promise.all(knownProviders.map(a => fetchProviderData(a)));
+  providerData = {};
+  results.forEach((d, i) => { if (d) providerData[knownProviders[i]] = d; });
+  renderProviderList();
+}
+
+function renderKnownList() {
+  const el = document.getElementById('known-list');
+  el.innerHTML = '';
+  knownProviders.forEach(addr => {
+    const row = document.createElement('div');
+    row.className = 'known-row';
+    row.innerHTML = `<span>${fmtAddr(addr)}</span><button class="remove-kp" data-addr="${addr}">×</button>`;
+    el.appendChild(row);
+  });
+  el.querySelectorAll('.remove-kp').forEach(btn => {
+    btn.onclick = () => {
+      knownProviders = knownProviders.filter(a => a !== btn.dataset.addr);
+      saveKnown();
+      delete providerData[btn.dataset.addr];
+      renderKnownList();
+      renderProviderList();
+      if (selectedProvider === btn.dataset.addr) {
+        selectedProvider = null;
+        updateProviderToggleText();
+        renderProviderStats();
+      }
+    };
+  });
+}
+
+function renderProviderList() {
+  const list = document.getElementById('provider-list');
+  list.innerHTML = '';
+
+  const sorted = Object.values(providerData)
+    .sort((a, b) => Number(a.houseEdge) - Number(b.houseEdge));
+
+  if (sorted.length === 0) {
+    const d = document.createElement('div');
+    d.className = 'empty-state';
+    d.style.padding = '20px 0';
+    d.textContent = 'NO PROVIDERS LOADED';
+    list.appendChild(d);
+    return;
+  }
+
+  sorted.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'provider-item' + (selectedProvider === p.address ? ' selected' : '');
+    item.dataset.addr = p.address;
+
+    const minCoeff = 2, maxCoeff = Number(MAX_COEFF).toLocaleString();
+    const edge = Number(p.houseEdge) / 10;
+
+    item.innerHTML = `
+      <div><div class="pi-lbl">HOUSE EDGE</div><div class="pi-val">${edge.toFixed(1)}%</div></div>
+      <div><div class="pi-lbl">COEFF RANGE</div><div class="pi-val">×${minCoeff}–×${maxCoeff}</div></div>
+      <div><div class="pi-lbl">LIQUIDITY</div><div class="pi-val">${fmtEth(p.liquidity)} ETH</div></div>
+      <div><div class="pi-lbl">GAS FEE</div><div class="pi-val">${fmtEth(p.gasFee)} ETH</div></div>
+    `;
+
+    item.onclick = () => {
+      selectedProvider = p.address;
+      list.querySelectorAll('.provider-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      updateProviderToggleText();
+      renderProviderStats();
+      closeProviderList();
+      updatePayoutPreview();
+    };
+
+    list.appendChild(item);
+  });
+}
+
+function updateProviderToggleText() {
+  const el = document.getElementById('provider-toggle-text');
+  el.textContent = selectedProvider ? fmtAddr(selectedProvider) : '— SELECT —';
+}
+
+function closeProviderList() {
+  const list = document.getElementById('provider-list');
+  const btn  = document.getElementById('provider-toggle');
+  list.style.display = 'none';
+  btn.classList.remove('open');
+}
+
+function renderProviderStats() {
+  const el = document.getElementById('provider-stats');
+  const p  = selectedProvider ? providerData[selectedProvider] : null;
+  if (!p) { el.innerHTML = '<div class="empty-state">NO PROVIDER SELECTED</div>'; return; }
+
+  const edge = (Number(p.houseEdge) / 10).toFixed(1);
+  const maxPayout = BigInt(p.liquidity);
+  const coeff = parseFloat(document.getElementById('coeff-input').value) || 2;
+  const winChance = ((Number(p.houseEdge) / (coeff * 1000)) * 100).toFixed(4);
+
+  el.innerHTML = `
+    <div class="stat-row"><span class="sk">ADDRESS</span><span class="sv">${fmtAddr(p.address)}</span></div>
+    <div class="stat-row"><span class="sk">HOUSE EDGE</span><span class="sv good">${edge}%</span></div>
+    <div class="stat-row"><span class="sk">LIQUIDITY</span><span class="sv">${fmtEth(maxPayout)} ETH</span></div>
+    <div class="stat-row"><span class="sk">GAS FEE</span><span class="sv warn">${fmtEth(p.gasFee)} ETH</span></div>
+    <div class="stat-row"><span class="sk">COEFF RANGE</span><span class="sv">×2 – ×1,000,000</span></div>
+    <div class="stat-row"><span class="sk">WIN CHANCE @ ×${coeff}</span><span class="sv good">${winChance}%</span></div>
+  `;
+}
+
+// ─── BET FLOW ───────────────────────────────────────────────────────────────
+function updatePayoutPreview() {
+  const coeff  = parseFloat(document.getElementById('coeff-input').value) || 0;
+  const amount = parseFloat(document.getElementById('amount-input').value) || 0;
+  const p = selectedProvider ? providerData[selectedProvider] : null;
+  const gasFee = p ? parseFloat(ethers.formatEther(p.gasFee)) : 0;
+  const netAmount = Math.max(0, amount - gasFee);
+  const payout = netAmount * coeff;
+  document.getElementById('payout-preview').textContent =
+    payout > 0 ? payout.toFixed(4) + ' ETH' : '— ETH';
+  if (p) renderProviderStats();
+}
+
+function regenN() {
+  const n = randomN();
+  document.getElementById('n-input').value = n.toString();
+  return n;
+}
+
+async function placeBet() {
+  if (!contract) { toast('Contract not set', 'error'); return; }
+  if (!selectedProvider) { toast('Select a provider first', 'warn'); return; }
+
+  const nRaw   = document.getElementById('n-input').value.trim();
+  const n      = nRaw ? BigInt(nRaw) : randomN();
+
+  const coeff  = BigInt(document.getElementById('coeff-input').value || '0');
+  if (coeff < 2n || coeff > MAX_COEFF) { toast('Coeff must be 2–1,000,000', 'warn'); return; }
+
+  const amountStr = document.getElementById('amount-input').value;
+  if (!amountStr) { toast('Enter bet amount', 'warn'); return; }
+
+  const salt     = randomSalt();
+  const pHash    = ethers.keccak256(ethers.solidityPacked(['uint256','string'], [n, salt]));
+  const amountWei = ethers.parseEther(amountStr);
+
+  const p = providerData[selectedProvider];
+  if (!p) { toast('Provider data missing', 'error'); return; }
+
+  const lockNeeded = (amountWei - p.gasFee) * (coeff - 1n);
+  if (lockNeeded > p.liquidity) { toast('Provider has insufficient liquidity', 'warn'); return; }
+
+  try {
+    toast('Sending transaction…');
+    const tx = await contract.placeBet(selectedProvider, pHash, coeff, { value: amountWei });
+    toast('Waiting for confirmation…');
+    const receipt = await tx.wait();
+
+    const iface = new ethers.Interface(ABI);
+    let betId = null;
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog(log);
+        if (parsed && parsed.name === 'BetPlaced') { betId = parsed.args.id; break; }
+      } catch {}
+    }
+
+    if (!betId) { toast('Could not find BetPlaced event', 'error'); return; }
+
+    const betRecord = {
+      id: betId,
+      n: n.toString(),
+      salt,
+      provider: selectedProvider,
+      coeff: coeff.toString(),
+      amount: amountStr,
+      status: 'PLACED',
+      ts: Date.now(),
+      serverS: null,
+      payout: null,
+      won: null,
+    };
+
+    bets.unshift(betRecord);
+    saveBets();
+    currentPage = 0;
+    renderBetList();
+    toast('Bet placed! ID: ' + betId.slice(0,10) + '…', 'info');
+    document.getElementById('n-input').value = '';
+  } catch(e) {
+    toast(e.reason || e.message || 'Transaction failed', 'error');
+  }
+}
+
+async function settleBet() {
+  if (!contract) { toast('Contract not set', 'error'); return; }
+  const bet = bets.find(b => b.id === selectedBetId);
+  if (!bet) { toast('No bet selected', 'warn'); return; }
+  if (bet.status !== 'ACCEPTED') { toast('Bet is not ACCEPTED yet', 'warn'); return; }
+
+  try {
+    toast('Sending settle…');
+    const tx = await contract.settle(bet.id, BigInt(bet.n), bet.salt);
+    toast('Waiting for confirmation…');
+    const receipt = await tx.wait();
+
+    const iface = new ethers.Interface(ABI);
+    let won = null, payout = null;
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog(log);
+        if (parsed && parsed.name === 'BetSettled') {
+          won    = parsed.args.playerWon;
+          payout = ethers.formatEther(parsed.args.payout);
+          break;
+        }
+      } catch {}
+    }
+
+    bet.status = won ? 'WON' : 'LOST';
+    bet.won    = won;
+    bet.payout = payout;
+    saveBets();
+    renderBetList();
+    selectedBetId = null;
+    document.getElementById('btn-settle').disabled = true;
+    toast(won ? `YOU WON ${parseFloat(payout).toFixed(4)} ETH 🎉` : 'Bet lost.', won ? 'info' : 'warn');
+  } catch(e) {
+    toast(e.reason || e.message || 'Settle failed', 'error');
+  }
+}
+
+// ─── SYNC BET STATUS ─────────────────────────────────────────────────────────
+async function syncBetStatus(bet) {
+  if (!contract) return;
+  if (bet.status === 'WON' || bet.status === 'LOST') return;
+  try {
+    const onchain = await contract.bets(bet.id);
+    if (onchain.player === ethers.ZeroAddress) {
+      // deleted from contract — settled or claimed
+      if (bet.status !== 'WON' && bet.status !== 'LOST') {
+        bet.status = 'SETTLED';
+        saveBets();
+      }
+      return;
+    }
+    const status = Number(onchain.status);
+    if (status === 1 && bet.status === 'PLACED') {
+      bet.status  = 'ACCEPTED';
+      bet.serverS = onchain.serverS.toString();
+      saveBets();
+    }
+  } catch {}
+}
+
+async function syncAllBets() {
+  const pending = bets.filter(b => b.status === 'PLACED' || b.status === 'ACCEPTED');
+  await Promise.all(pending.map(syncBetStatus));
+  renderBetList();
+}
+
+// ─── RENDER BETS ─────────────────────────────────────────────────────────────
+function renderBetList() {
+  const container = document.getElementById('bet-list');
+  container.innerHTML = '';
+
+  const total = bets.length;
+  const pages = Math.max(1, Math.ceil(total / BETS_PER_PAGE));
+  currentPage = Math.min(currentPage, pages - 1);
+
+  document.getElementById('page-info').textContent =
+    total === 0 ? 'NO BETS' : `PAGE ${currentPage + 1} / ${pages}  (${total} TOTAL)`;
+  document.getElementById('btn-prev').disabled = currentPage === 0;
+  document.getElementById('btn-next').disabled = currentPage >= pages - 1;
+
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state">NO BETS YET — PLACE YOUR FIRST BET ABOVE</div>';
+    return;
+  }
+
+  const slice = bets.slice(currentPage * BETS_PER_PAGE, (currentPage + 1) * BETS_PER_PAGE);
+
+  slice.forEach(bet => {
+    const card = document.createElement('div');
+    card.className = 'bet-card' + (bet.id === selectedBetId ? ' active' : '');
+
+    const d = new Date(bet.ts);
+    const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+    card.innerHTML = `
+      <div class="bet-card-header">
+        <div class="bet-id">${bet.id.slice(0,10)}…${bet.id.slice(-6)}</div>
+        <div class="bet-status ${bet.status}">${bet.status}</div>
+      </div>
+      <div class="bet-meta">
+        <div class="bet-meta-item"><div class="bm-lbl">AMOUNT</div><div class="bm-val">${bet.amount} ETH</div></div>
+        <div class="bet-meta-item"><div class="bm-lbl">COEFF</div><div class="bm-val">×${bet.coeff}</div></div>
+        <div class="bet-meta-item"><div class="bm-lbl">PROVIDER</div><div class="bm-val">${fmtAddr(bet.provider)}</div></div>
+        <div class="bet-meta-item"><div class="bm-lbl">TIME</div><div class="bm-val" style="font-size:11px">${timeStr}</div></div>
+      </div>
+      ${bet.won !== null ? `<div style="margin-top:10px; font-size:11px; color:${bet.won ? 'var(--accent)' : 'var(--danger)'}">
+        ${bet.won ? '▲ WON ' + parseFloat(bet.payout).toFixed(4) + ' ETH' : '▼ LOST'}
+      </div>` : ''}
+    `;
+
+    card.onclick = () => {
+      selectedBetId = bet.id;
+      document.getElementById('btn-settle').disabled = bet.status !== 'ACCEPTED';
+      document.querySelectorAll('.bet-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+    };
+
+    container.appendChild(card);
+  });
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-connect').onclick = connectWallet;
+
+document.getElementById('btn-add-provider').onclick = async () => {
+  const val = document.getElementById('add-provider-input').value.trim();
+  if (!val || knownProviders.includes(val)) return;
+  knownProviders.push(val);
+  saveKnown();
+  renderKnownList();
+  await refreshAllProviders();
+  document.getElementById('add-provider-input').value = '';
+  toast('Provider added');
+};
+
+document.getElementById('provider-toggle').onclick = () => {
+  const list = document.getElementById('provider-list');
+  const btn  = document.getElementById('provider-toggle');
+  const open = list.style.display === 'flex';
+  list.style.display  = open ? 'none' : 'flex';
+  list.style.flexDirection = 'column';
+  btn.classList.toggle('open', !open);
+};
+
+document.getElementById('btn-regen-n').onclick = () => { regenN(); };
+
+document.getElementById('coeff-input').oninput  = updatePayoutPreview;
+document.getElementById('amount-input').oninput = updatePayoutPreview;
+
+document.getElementById('btn-place').onclick  = placeBet;
+document.getElementById('btn-settle').onclick = settleBet;
+
+document.getElementById('btn-prev').onclick = () => { currentPage--; renderBetList(); };
+document.getElementById('btn-next').onclick = () => { currentPage++; renderBetList(); };
+
+// Initial render
+regenN();
+renderKnownList();
+renderBetList();
+
+// Auto-sync pending bets every 15s
+setInterval(syncAllBets, 15000);
+</script>
+</body>
+</html>
