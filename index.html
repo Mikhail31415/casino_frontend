@@ -481,10 +481,10 @@
         </div>
 
         <div class="field">
-          <label>YOUR SECRET NUMBER (n)</label>
+          <label>YOUR SECRET NUMBER (s)</label>
           <div class="input-row">
-            <input type="text" id="n-input" placeholder="random">
-            <button id="btn-regen-n">⟳ RANDOM</button>
+            <input type="text" id="s-input" placeholder="random">
+            <button id="btn-regen-s">⟳ RANDOM</button>
           </div>
         </div>
 
@@ -532,7 +532,7 @@ const ABI = [
   "function providers(address) view returns (uint256 liquidity, uint256 houseEdge, uint256 gasFee, address responsible, bool isActive)",
   "function bets(bytes32) view returns (address player, address provider, uint256 amount, uint256 coeff, bytes32 playerHash, uint256 serverS, uint256 deadline, uint8 status)",
   "function placeBet(address _provider, bytes32 _pHash, uint256 _coeff) payable",
-  "function settle(bytes32 _id, uint256 _n, string _salt)",
+  "function settle(bytes32 _id, uint256 _s, string _salt)",
   "function claim(bytes32 _id)",
   "function hostGasFee() view returns (uint256)",
   "event BetPlaced(bytes32 indexed id, address player, address provider, uint256 amount, uint256 coeff)",
@@ -540,8 +540,6 @@ const ABI = [
   "event BetSettled(bytes32 indexed id, bool playerWon, uint256 payout)",
 ];
 
-const MAX_COEFF = 100n;
-const MAX_N     = 1_000_000n;
 const BETS_PER_PAGE = 5;
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
@@ -551,7 +549,7 @@ let contract  = null;
 let contractAddress = localStorage.getItem('cc_contract') || '';
 
 let knownProviders   = JSON.parse(localStorage.getItem('cc_known_providers') || '[]');
-let providerData     = {};   // address → on-chain data
+let providerData     = {};
 let selectedProvider = null;
 
 let bets         = JSON.parse(localStorage.getItem('cc_bets') || '[]');
@@ -572,10 +570,15 @@ function fmtAddr(a) { return a ? a.slice(0,6) + '…' + a.slice(-4) : '—'; }
 function fmtEth(wei) { return parseFloat(ethers.formatEther(wei)).toFixed(4); }
 function fmtEdge(e) { return (Number(e) / 10).toFixed(1) + '%'; }
 
-function randomN() {
-  const arr = new Uint32Array(1);
-  crypto.getRandomValues(arr);
-  return (BigInt(arr[0]) % MAX_N) + 1n;
+function randomS() {
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+
+  const hex = Array.from(array)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+
+  return BigInt("0x" + hex);
 }
 
 function randomSalt() {
@@ -746,28 +749,27 @@ function updatePayoutPreview() {
     payout > 0 ? payout.toFixed(4) + ' ETH' : '— ETH';
 }
 
-function regenN() {
-  const n = randomN();
-  document.getElementById('n-input').value = n.toString();
-  return n;
+function regenS() {
+  const s = randomS();
+  document.getElementById('s-input').value = s.toString();
+  return s;
 }
 
 async function placeBet() {
   if (!contract) { toast('Contract not set', 'error'); return; }
   if (!selectedProvider) { toast('Select a provider first', 'warn'); return; }
 
-  const nRaw   = document.getElementById('n-input').value.trim();
-  const n      = nRaw ? BigInt(nRaw) : randomN();
-  if (n < 1n || n > MAX_N) { toast(`N must be 1–${MAX_N}`, 'warn'); return; }
+  const sRaw   = document.getElementById('s-input').value.trim();
+  const s      = sRaw ? BigInt(sRaw) : randomS();
 
   const coeff  = BigInt(document.getElementById('coeff-input').value || '0');
-  if (coeff < 2n || coeff > MAX_COEFF) { toast('Coeff must be 2–100', 'warn'); return; }
+  if (coeff < 1n) { toast('Coeff must be larger than 1', 'warn'); return; }
 
   const amountStr = document.getElementById('amount-input').value;
   if (!amountStr) { toast('Enter bet amount', 'warn'); return; }
 
   const salt     = randomSalt();
-  const pHash    = ethers.keccak256(ethers.solidityPacked(['uint256','string'], [n, salt]));
+  const pHash    = ethers.keccak256(ethers.solidityPacked(['uint256','string'], [s, salt]));
   const amountWei = ethers.parseEther(amountStr);
 
   const p = providerData[selectedProvider];
@@ -795,7 +797,7 @@ async function placeBet() {
 
     const betRecord = {
       id: betId,
-      n: n.toString(),
+      s: s.toString(),
       salt,
       provider: selectedProvider,
       coeff: coeff.toString(),
@@ -812,7 +814,7 @@ async function placeBet() {
     currentPage = 0;
     renderBetList();
     toast('Bet placed! ID: ' + betId.slice(0,10) + '…', 'info');
-    document.getElementById('n-input').value = '';
+    document.getElementById('s-input').value = '';
   } catch(e) {
     toast(e.reason || e.message || 'Transaction failed', 'error');
   }
@@ -826,7 +828,7 @@ async function settleBet() {
 
   try {
     toast('Sending settle…');
-    const tx = await contract.settle(bet.id, BigInt(bet.n), bet.salt);
+    const tx = await contract.settle(bet.id, BigInt(bet.s), bet.salt);
     toast('Waiting for confirmation…');
     const receipt = await tx.wait();
 
@@ -974,7 +976,7 @@ document.getElementById('provider-toggle').onclick = () => {
   btn.classList.toggle('open', !open);
 };
 
-document.getElementById('btn-regen-n').onclick = () => { regenN(); };
+document.getElementById('btn-regen-s').onclick = () => { regenS(); };
 
 document.getElementById('coeff-input').oninput  = updatePayoutPreview;
 document.getElementById('amount-input').oninput = updatePayoutPreview;
@@ -986,7 +988,7 @@ document.getElementById('btn-prev').onclick = () => { currentPage--; renderBetLi
 document.getElementById('btn-next').onclick = () => { currentPage++; renderBetList(); };
 
 // Initial render
-regenN();
+regenS();
 renderKnownList();
 renderBetList();
 
