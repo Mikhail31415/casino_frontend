@@ -684,7 +684,7 @@ function renderProviderList() {
     item.className = 'provider-item' + (selectedProvider === p.address ? ' selected' : '');
     item.dataset.addr = p.address;
 
-    const minCoeff = 2, maxCoeff = Number(MAX_COEFF);
+    const minCoeff = 1;
     const edge = Number(p.houseEdge) / 10;
 
     item.innerHTML = `
